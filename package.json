@@ -1,0 +1,7 @@
+{
+  "name": "exam-checker-functions",
+  "version": "1.0.0",
+  "dependencies": {
+    "google-spreadsheet": "^4.1.1"
+  }
+}
