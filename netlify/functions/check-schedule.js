@@ -36,12 +36,21 @@ exports.handler = async function(event, context) {
         const csvFilePath = path.resolve(__dirname, 'student-data.csv');
         
         if (!fs.existsSync(csvFilePath)) {
-            console.error('データファイルが見つかりません: student-data.csv');
+            const errorMessage = 'サーバー設定エラー: データファイル (student-data.csv) が見つかりません。netlify/functions/ フォルダにファイルが配置されているか確認してください。';
+            console.error(errorMessage);
+            // ユーザーには一般的なエラーメッセージを返す
             return { statusCode: 500, body: JSON.stringify({ success: false, message: 'サーバー設定エラーです。' }) };
         }
 
         const csvText = fs.readFileSync(csvFilePath, 'utf-8');
         const studentData = parseCSV(csvText);
+
+        // ファイルは存在するが、中身が空か解析に失敗した場合のチェック
+        if (studentData.length === 0 && csvText.trim() !== '') {
+            const errorMessage = 'CSV解析エラー: ファイルは読み込めましたが、データを正しく解析できませんでした。CSVの形式（ヘッダー行やカンマ区切り）が正しいか、また文字コードがUTF-8になっているか確認してください。';
+            console.error(errorMessage);
+            return { statusCode: 500, body: JSON.stringify({ success: false, message: 'サーバーデータエラーです。' }) };
+        }
         // --- 読み込み処理ここまで ---
 
         const { examNumber, password } = JSON.parse(event.body);
@@ -78,10 +87,13 @@ exports.handler = async function(event, context) {
         }
 
     } catch (error) {
-        console.error('エラーが発生しました:', error);
+        // Netlifyのログに詳細なエラー情報を出力
+        console.error('サーバー関数で予期せぬエラーが発生しました:', error.message);
+        console.error('スタックトレース:', error.stack);
+        
         return {
             statusCode: 500,
-            body: JSON.stringify({ success: false, message: 'サーバーでエラーが発生しました。' }),
+            body: JSON.stringify({ success: false, message: 'サーバーで予期せぬエラーが発生しました。' }),
         };
     }
 };
