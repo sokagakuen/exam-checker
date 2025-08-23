@@ -6,6 +6,8 @@
     <title>関西創価小学校入学選考 日時案内</title>
     <!-- Tailwind CSSを読み込み -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2canvasライブラリを読み込み -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         /* 日本語フォントの表示を最適化 */
         body {
@@ -62,12 +64,26 @@
         <!-- 結果表示エリア -->
         <div id="result" class="mt-8 hidden border-t pt-6">
             <div id="successContent" class="hidden">
-                <h2 id="studentName" class="text-xl font-bold text-gray-800 text-center mb-4"></h2>
-                <div class="space-y-3 text-gray-700 bg-gray-50 p-4 rounded-lg">
-                    <p><strong>受験番号:</strong> <span id="examNumberDisplay"></span></p>
-                    <p><strong>試験日:</strong> <span id="examDate"></span></p>
-                    <p><strong>集合時間:</strong> <span id="meetingTime"></span></p>
-                    <p><strong>試験時間:</strong> <span id="examPeriod"></span></p>
+                <!-- ▼▼▼ キャプチャー対象エリア ▼▼▼ -->
+                <div id="captureArea" class="bg-white p-4">
+                    <h2 id="studentName" class="text-xl font-bold text-gray-800 text-center mb-4"></h2>
+                    <div class="space-y-3 text-gray-700 bg-gray-50 p-4 rounded-lg border">
+                        <p><strong>受験番号:</strong> <span id="examNumberDisplay"></span></p>
+                        <p><strong>試験日:</strong> <span id="examDate"></span></p>
+                        <p><strong>集合時間:</strong> <span id="meetingTime"></span></p>
+                        <p><strong>試験時間:</strong> <span id="examPeriod"></span></p>
+                    </div>
+                </div>
+                <!-- ▲▲▲ キャプチャー対象エリアここまで ▲▲▲ -->
+
+                <!-- ▼▼▼ キャプチャーボタン ▼▼▼ -->
+                <div class="mt-6 text-center">
+                    <button id="captureButton" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+                        </svg>
+                        この内容を画像で保存
+                    </button>
                 </div>
             </div>
             <div id="errorContent" class="hidden p-4 rounded-lg bg-red-100 text-red-800">
@@ -94,6 +110,7 @@
         const submitButton = document.getElementById('submitButton');
         const buttonText = document.getElementById('buttonText');
         const loader = document.getElementById('loader');
+        const captureButton = document.getElementById('captureButton');
 
         loginForm.addEventListener('submit', async function(event) {
             event.preventDefault();
@@ -145,6 +162,31 @@
                 submitButton.disabled = false;
                 resultDiv.classList.remove('hidden');
             }
+        });
+
+        // キャプチャーボタンがクリックされたときの処理
+        captureButton.addEventListener('click', () => {
+            const captureArea = document.getElementById('captureArea');
+            const studentName = studentNameEl.textContent.replace(' 様', '');
+            const fileName = `入学選考日時_${studentName}.png`;
+
+            // html2canvasを実行
+            html2canvas(captureArea, {
+                // 背景を白に設定し、スケールを上げて高画質化
+                backgroundColor: '#ffffff',
+                scale: 2
+            }).then(canvas => {
+                // canvasを画像(PNG)に変換
+                const image = canvas.toDataURL('image/png');
+                
+                // ダウンロード用のリンクを作成
+                const link = document.createElement('a');
+                link.href = image;
+                link.download = fileName;
+                
+                // リンクをクリックしてダウンロードを実行
+                link.click();
+            });
         });
     </script>
 
