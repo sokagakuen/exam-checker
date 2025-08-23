@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>関西創価小学校入学選考 日時案内</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 日本語フォントの表示を最適化 */
+        body {
+            font-family: 'Inter', 'Helvetica Neue', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+        }
+        /* ローディングスピナーのスタイル */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8">
+        <div class="text-center mb-6">
+            <h1 class="text-xl font-bold text-gray-800">関西創価小学校入学選考</h1>
+            <h2 class="text-2xl font-bold text-gray-800 mt-1">行動観察・検査</h2>
+            <h3 class="text-lg font-semibold text-gray-700 mt-1">日時案内</h3>
+        </div>
+        
+        <!-- ログインフォーム -->
+        <form id="loginForm" class="space-y-6">
+            <div>
+                <label for="examNumber" class="block text-sm font-medium text-gray-700">受験番号</label>
+                <input type="text" id="examNumber" name="examNumber" required
+                       class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700">パスワード</label>
+                <input type="password" id="password" name="password" required
+                       class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                <p class="mt-2 text-xs text-gray-600">
+                    パスワードには「出願時にmiraicompassに登録された合否発表・入学金用パスワード」を入力してください。
+                </p>
+            </div>
+            <div>
+                <button type="submit" id="submitButton"
+                        class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                    <span id="buttonText">確認する</span>
+                    <div id="loader" class="loader hidden"></div>
+                </button>
+            </div>
+        </form>
+
+        <!-- 結果表示エリア -->
+        <div id="result" class="mt-8 hidden border-t pt-6">
+            <div id="successContent" class="hidden">
+                <h2 id="studentName" class="text-xl font-bold text-gray-800 text-center mb-4"></h2>
+                <div class="space-y-3 text-gray-700 bg-gray-50 p-4 rounded-lg">
+                    <p><strong>受験番号:</strong> <span id="examNumberDisplay"></span></p>
+                    <p><strong>試験日:</strong> <span id="examDate"></span></p>
+                    <p><strong>集合時間:</strong> <span id="meetingTime"></span></p>
+                    <p><strong>試験時間:</strong> <span id="examPeriod"></span></p>
+                </div>
+            </div>
+            <div id="errorContent" class="hidden p-4 rounded-lg bg-red-100 text-red-800">
+                 <p id="errorMessage" class="text-center font-medium"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_ENDPOINT = '/.netlify/functions/check-schedule'; 
+
+        const loginForm = document.getElementById('loginForm');
+        const resultDiv = document.getElementById('result');
+        const successContent = document.getElementById('successContent');
+        const errorContent = document.getElementById('errorContent');
+        
+        const studentNameEl = document.getElementById('studentName');
+        const examNumberDisplayEl = document.getElementById('examNumberDisplay');
+        const examDateEl = document.getElementById('examDate');
+        const meetingTimeEl = document.getElementById('meetingTime');
+        const examPeriodEl = document.getElementById('examPeriod');
+        const errorMessageEl = document.getElementById('errorMessage');
+
+        const submitButton = document.getElementById('submitButton');
+        const buttonText = document.getElementById('buttonText');
+        const loader = document.getElementById('loader');
+
+        loginForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            buttonText.textContent = '確認中...';
+            loader.classList.remove('hidden');
+            submitButton.disabled = true;
+
+            const inputExamNumber = document.getElementById('examNumber').value;
+            const inputPassword = document.getElementById('password').value;
+
+            resultDiv.classList.add('hidden');
+            successContent.classList.add('hidden');
+            errorContent.classList.add('hidden');
+
+            try {
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        examNumber: inputExamNumber,
+                        password: inputPassword,
+                    }),
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const student = result.data;
+                    studentNameEl.textContent = `${student.lastName} ${student.firstName} 様`;
+                    examNumberDisplayEl.textContent = student.examNumber;
+                    examDateEl.textContent = student.examDate;
+                    meetingTimeEl.textContent = student.meetingTime;
+                    examPeriodEl.textContent = student.examPeriod;
+                    
+                    successContent.classList.remove('hidden');
+                } else {
+                    errorMessageEl.textContent = result.message || '認証に失敗しました。';
+                    errorContent.classList.remove('hidden');
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                errorMessageEl.textContent = '通信エラーが発生しました。時間をおいて再度お試しください。';
+                errorContent.classList.remove('hidden');
+            } finally {
+                buttonText.textContent = '確認する';
+                loader.classList.add('hidden');
+                submitButton.disabled = false;
+                resultDiv.classList.remove('hidden');
+            }
+        });
+    </script>
+
+</body>
+</html>

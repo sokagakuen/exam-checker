@@ -1,0 +1,4 @@
+examNumber,password,lastName,firstName,examDate,meetingTime,examPeriod
+1001,pass1001,創価,太郎,2025年9月1日(月),8:30,9:00～10:00
+1002,pass1002,関西,花子,2025年9月1日(月),10:30,11:00～12:00
+1003,pass1003,東京,次郎,2025年9月2日(火),9:30,10:00～11:00
