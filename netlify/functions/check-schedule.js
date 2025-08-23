@@ -1,29 +1,8 @@
-// Node.jsの標準モジュールをインポート
-const fs = require('fs');
-const path = require('path');
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { JWT } = require('google-auth-library');
 
-/**
- * CSVテキストをオブジェクトの配列に変換するヘルパー関数
- * @param {string} csvText - CSV形式の文字列
- * @returns {Array<Object>} 変換されたオブジェクトの配列
- */
-const parseCSV = (csvText) => {
-    // BOM (Byte Order Mark) を除去
-    const text = csvText.startsWith('\uFEFF') ? csvText.substring(1) : csvText;
-    const lines = text.trim().split(/\r?\n/); // WindowsとUnixの改行コードに対応
-    if (lines.length < 2) return [];
-
-    const headers = lines[0].split(',').map(h => h.trim());
-    
-    return lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim());
-        const entry = {};
-        headers.forEach((header, index) => {
-            entry[header] = values[index];
-        });
-        return entry;
-    });
-};
+// Netlifyの環境変数から設定を読み込む
+const { GOOGLE_SHEET_ID, GOOGLE_CREDENTIALS_JSON, GOOGLE_SHEET_NAME } = process.env;
 
 // 以下はサーバーレス関数のエントリーポイント
 exports.handler = async function(event, context) {
@@ -31,28 +10,37 @@ exports.handler = async function(event, context) {
         return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
     }
 
+    // 環境変数が設定されているか確認
+    if (!GOOGLE_SHEET_ID || !GOOGLE_CREDENTIALS_JSON || !GOOGLE_SHEET_NAME) {
+        console.error('環境変数が設定されていません。(GOOGLE_SHEET_ID, GOOGLE_CREDENTIALS_JSON, GOOGLE_SHEET_NAME)');
+        return { statusCode: 500, body: JSON.stringify({ success: false, message: 'サーバー設定エラーです。' }) };
+    }
+
     try {
-        // --- CSVファイルの読み込み処理 ---
-        const csvFilePath = path.resolve(__dirname, 'student-data.csv');
+        // --- Google Sheets API 認証 ---
+        const creds = JSON.parse(GOOGLE_CREDENTIALS_JSON);
+        const serviceAccountAuth = new JWT({
+            email: creds.client_email,
+            key: creds.private_key,
+            scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+        });
+        const doc = new GoogleSpreadsheet(GOOGLE_SHEET_ID, serviceAccountAuth);
         
-        if (!fs.existsSync(csvFilePath)) {
-            const errorMessage = 'サーバー設定エラー: データファイル (student-data.csv) が見つかりません。netlify/functions/ フォルダにファイルが配置されているか確認してください。';
-            console.error(errorMessage);
-            // ユーザーには一般的なエラーメッセージを返す
-            return { statusCode: 500, body: JSON.stringify({ success: false, message: 'サーバー設定エラーです。' }) };
-        }
-
-        const csvText = fs.readFileSync(csvFilePath, 'utf-8');
-        const studentData = parseCSV(csvText);
-
-        // ファイルは存在するが、中身が空か解析に失敗した場合のチェック
-        if (studentData.length === 0 && csvText.trim() !== '') {
-            const errorMessage = 'CSV解析エラー: ファイルは読み込めましたが、データを正しく解析できませんでした。CSVの形式（ヘッダー行やカンマ区切り）が正しいか、また文字コードがUTF-8になっているか確認してください。';
-            console.error(errorMessage);
+        // --- スプレッドシートからデータを読み込み ---
+        await doc.loadInfo();
+        // ★シートを「インデックス番号」ではなく「名前」で取得するように変更
+        const sheet = doc.sheetsByTitle[GOOGLE_SHEET_NAME]; 
+        
+        // 指定された名前のシートが存在しない場合のエラーハンドリング
+        if (!sheet) {
+            console.error(`'${GOOGLE_SHEET_NAME}' という名前のシートが見つかりません。`);
             return { statusCode: 500, body: JSON.stringify({ success: false, message: 'サーバーデータエラーです。' }) };
         }
-        // --- 読み込み処理ここまで ---
 
+        const rows = await sheet.getRows();
+        const studentData = rows.map(row => row.toObject());
+
+        // --- ユーザー認証 ---
         const { examNumber, password } = JSON.parse(event.body);
         if (!examNumber || !password) {
             return { statusCode: 400, body: JSON.stringify({ success: false, message: '受験番号とパスワードを入力してください。' }) };
@@ -61,7 +49,7 @@ exports.handler = async function(event, context) {
         const student = studentData.find(s => s.examNumber === examNumber && s.password === password);
 
         if (student) {
-            // 認証成功：パスワード以外の必要な情報を返す
+            // 認証成功
             return {
                 statusCode: 200,
                 headers: { 'Content-Type': 'application/json' },
@@ -87,13 +75,10 @@ exports.handler = async function(event, context) {
         }
 
     } catch (error) {
-        // Netlifyのログに詳細なエラー情報を出力
-        console.error('サーバー関数で予期せぬエラーが発生しました:', error.message);
-        console.error('スタックトレース:', error.stack);
-        
+        console.error('APIエラー:', error.message);
         return {
             statusCode: 500,
-            body: JSON.stringify({ success: false, message: 'サーバーで予期せぬエラーが発生しました。' }),
+            body: JSON.stringify({ success: false, message: 'サーバーでエラーが発生しました。' }),
         };
     }
 };
