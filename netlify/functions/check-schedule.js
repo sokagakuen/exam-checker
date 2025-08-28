@@ -40,7 +40,8 @@ exports.handler = async function(event, context) {
             return { statusCode: 400, body: JSON.stringify({ success: false, message: '受験番号とパスワードを入力してください。' }) };
         }
 
-        const student = studentRows.find(row => row.get('examNumber') === examNumber && row.get('password') === password)?.toObject();
+        // ★★★ 比較時に両方を文字列に変換 ★★★
+        const student = studentRows.find(row => row.get('examNumber').toString() === examNumber.toString() && row.get('password') === password)?.toObject();
 
         if (student) {
             // ▼▼▼ ログイン記録の書き込み処理 (login-historyシートの特定セルのみ更新) ▼▼▼
@@ -49,14 +50,14 @@ exports.handler = async function(event, context) {
                 if (!historySheet) {
                     console.error(`'${GOOGLE_HISTORY_SHEET_NAME}' という名前のシートが見つかりません。`);
                 } else {
-                    // ヘッダー行を読み込む
                     await historySheet.loadHeaderRow();
                     const historyRows = await historySheet.getRows();
-                    const historyRow = historyRows.find(row => row.get('examNumber') === examNumber);
+                    // ★★★ 比較時に両方を文字列に変換 ★★★
+                    const historyRow = historyRows.find(row => row.get('examNumber').toString() === examNumber.toString());
 
                     if (historyRow) {
-                        // ★★★ 行全体ではなく、特定のセルだけを更新する方式に変更 ★★★
-                        const rowIndex = historyRow.rowIndex - 1; // 0-based index
+                        console.log(`Found history row for examNumber: ${examNumber}`); // デバッグログ
+                        const rowIndex = historyRow.rowIndex - 1;
                         await historySheet.loadCells({
                             startRowIndex: rowIndex, endRowIndex: rowIndex + 1,
                             startColumnIndex: 0, endColumnIndex: historySheet.headerValues.length
@@ -90,7 +91,8 @@ exports.handler = async function(event, context) {
                             lastLoginCell.value = timestamp;
                         }
 
-                        await historySheet.saveUpdatedCells(); // 変更したセルだけを保存
+                        await historySheet.saveUpdatedCells();
+                        console.log(`Successfully updated history for examNumber: ${examNumber}`); // デバッグログ
                     } else {
                         console.warn(`login-historyシートに受験番号'${examNumber}'の記録が見つかりませんでした。`);
                     }
