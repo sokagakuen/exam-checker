@@ -47,53 +47,36 @@ exports.handler = async function(event, context) {
         })?.toObject();
 
         if (student) {
-            // ▼▼▼ ログイン記録の書き込み処理 ▼▼▼
+            // ▼▼▼ ログイン記録の書き込み処理 (QUERY関数を使わない方式) ▼▼▼
             try {
                 const historySheet = doc.sheetsByTitle[GOOGLE_HISTORY_SHEET_NAME];
                 if (!historySheet) {
                     console.error(`'${GOOGLE_HISTORY_SHEET_NAME}' という名前のシートが見つかりません。`);
                 } else {
-                    await historySheet.loadHeaderRow();
                     const historyRows = await historySheet.getRows();
-                    
                     const historyRow = historyRows.find(row => {
                         const numInSheet = row.get('examNumber');
                         return numInSheet && numInSheet.toString().trim() === examNumber.toString().trim();
                     });
 
+                    const now = new Date();
+                    const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+                    const timestamp = jstNow.toISOString().slice(0, 19).replace('T', ' ');
+
                     if (historyRow) {
-                        // ★★★ シート全体のセルを読み込むように修正 ★★★
-                        await historySheet.loadCells();
-
-                        const rowIndex = historyRow.rowIndex - 1;
-                        const now = new Date();
-                        const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-                        const timestamp = jstNow.toISOString().slice(0, 19).replace('T', ' ');
-
-                        const loginCountIndex = historySheet.headerValues.indexOf('loginCount');
-                        if (loginCountIndex !== -1) {
-                            const loginCountCell = historySheet.getCell(rowIndex, loginCountIndex);
-                            const currentCount = parseInt(loginCountCell.value, 10) || 0;
-                            loginCountCell.value = currentCount + 1;
-                        }
-
-                        const firstLoginIndex = historySheet.headerValues.indexOf('firstLogin');
-                        if (firstLoginIndex !== -1) {
-                            const firstLoginCell = historySheet.getCell(rowIndex, firstLoginIndex);
-                            if (!firstLoginCell.value) {
-                                firstLoginCell.value = timestamp;
-                            }
-                        }
-
-                        const lastLoginIndex = historySheet.headerValues.indexOf('lastLogin');
-                        if (lastLoginIndex !== -1) {
-                            const lastLoginCell = historySheet.getCell(rowIndex, lastLoginIndex);
-                            lastLoginCell.value = timestamp;
-                        }
-
-                        await historySheet.saveUpdatedCells();
+                        // 2回目以降のログイン：既存の行を更新
+                        const currentCount = parseInt(historyRow.get('loginCount'), 10) || 0;
+                        historyRow.set('loginCount', currentCount + 1);
+                        historyRow.set('lastLogin', timestamp);
+                        await historyRow.save();
                     } else {
-                        console.warn(`login-historyシートに受験番号'${examNumber}'の記録が見つかりませんでした。`);
+                        // 初回ログイン：新しい行を追加
+                        await historySheet.addRow({
+                            examNumber: student.examNumber,
+                            loginCount: 1,
+                            firstLogin: timestamp,
+                            lastLogin: timestamp,
+                        });
                     }
                 }
             } catch (writeError) {
