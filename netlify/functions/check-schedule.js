@@ -54,6 +54,7 @@ exports.handler = async function(event, context) {
 
                     if (historyRow) {
                         // 既存の記録を更新
+                        // ★ examNumber, lastName, firstName は更新せず、以下の3列のみを更新します
                         const now = new Date();
                         const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
                         const timestamp = jstNow.toISOString().slice(0, 19).replace('T', ' ');
