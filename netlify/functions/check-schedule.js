@@ -43,34 +43,55 @@ exports.handler = async function(event, context) {
         const student = studentRows.find(row => row.get('examNumber') === examNumber && row.get('password') === password)?.toObject();
 
         if (student) {
-            // ▼▼▼ ログイン記録の書き込み処理 (login-historyシートの既存行を更新) ▼▼▼
+            // ▼▼▼ ログイン記録の書き込み処理 (login-historyシートの特定セルのみ更新) ▼▼▼
             try {
                 const historySheet = doc.sheetsByTitle[GOOGLE_HISTORY_SHEET_NAME];
                 if (!historySheet) {
                     console.error(`'${GOOGLE_HISTORY_SHEET_NAME}' という名前のシートが見つかりません。`);
                 } else {
+                    // ヘッダー行を読み込む
+                    await historySheet.loadHeaderRow();
                     const historyRows = await historySheet.getRows();
-                    let historyRow = historyRows.find(row => row.get('examNumber') === examNumber);
+                    const historyRow = historyRows.find(row => row.get('examNumber') === examNumber);
 
                     if (historyRow) {
-                        // 既存の記録を更新
-                        // ★ examNumber, lastName, firstName は更新せず、以下の3列のみを更新します
+                        // ★★★ 行全体ではなく、特定のセルだけを更新する方式に変更 ★★★
+                        const rowIndex = historyRow.rowIndex - 1; // 0-based index
+                        await historySheet.loadCells({
+                            startRowIndex: rowIndex, endRowIndex: rowIndex + 1,
+                            startColumnIndex: 0, endColumnIndex: historySheet.headerValues.length
+                        });
+
                         const now = new Date();
                         const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
                         const timestamp = jstNow.toISOString().slice(0, 19).replace('T', ' ');
 
-                        const currentCount = parseInt(historyRow.get('loginCount'), 10) || 0;
-                        const firstLogin = historyRow.get('firstLogin');
-
-                        historyRow.set('loginCount', currentCount + 1);
-                        // firstLoginが空の場合のみ、初回ログイン日時を記録
-                        if (!firstLogin) {
-                            historyRow.set('firstLogin', timestamp);
+                        // loginCountセルの更新
+                        const loginCountIndex = historySheet.headerValues.indexOf('loginCount');
+                        if (loginCountIndex !== -1) {
+                            const loginCountCell = historySheet.getCell(rowIndex, loginCountIndex);
+                            const currentCount = parseInt(loginCountCell.value, 10) || 0;
+                            loginCountCell.value = currentCount + 1;
                         }
-                        historyRow.set('lastLogin', timestamp);
-                        await historyRow.save(); // 変更を保存
+
+                        // firstLoginセルの更新 (初回のみ)
+                        const firstLoginIndex = historySheet.headerValues.indexOf('firstLogin');
+                        if (firstLoginIndex !== -1) {
+                            const firstLoginCell = historySheet.getCell(rowIndex, firstLoginIndex);
+                            if (!firstLoginCell.value) {
+                                firstLoginCell.value = timestamp;
+                            }
+                        }
+
+                        // lastLoginセルの更新
+                        const lastLoginIndex = historySheet.headerValues.indexOf('lastLogin');
+                        if (lastLoginIndex !== -1) {
+                            const lastLoginCell = historySheet.getCell(rowIndex, lastLoginIndex);
+                            lastLoginCell.value = timestamp;
+                        }
+
+                        await historySheet.saveUpdatedCells(); // 変更したセルだけを保存
                     } else {
-                        // データが事前に準備されている前提のため、ここに来た場合はデータ不整合
                         console.warn(`login-historyシートに受験番号'${examNumber}'の記録が見つかりませんでした。`);
                     }
                 }
