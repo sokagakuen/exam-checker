@@ -40,14 +40,14 @@ exports.handler = async function(event, context) {
             return { statusCode: 400, body: JSON.stringify({ success: false, message: '受験番号とパスワードを入力してください。' }) };
         }
 
-        // ★★★ 空のセルがあってもエラーにならないように修正 ★★★
         const student = studentRows.find(row => {
             const num = row.get('examNumber');
-            return num && num.toString() === examNumber.toString() && row.get('password') === password;
+            const pass = row.get('password');
+            return num && num.toString().trim() === examNumber.toString().trim() && pass && pass.toString() === password;
         })?.toObject();
 
         if (student) {
-            // ▼▼▼ ログイン記録の書き込み処理 (login-historyシートの特定セルのみ更新) ▼▼▼
+            // ▼▼▼ ログイン記録の書き込み処理 ▼▼▼
             try {
                 const historySheet = doc.sheetsByTitle[GOOGLE_HISTORY_SHEET_NAME];
                 if (!historySheet) {
@@ -55,11 +55,23 @@ exports.handler = async function(event, context) {
                 } else {
                     await historySheet.loadHeaderRow();
                     const historyRows = await historySheet.getRows();
-                    // ★★★ 空のセルがあってもエラーにならないように修正 ★★★
+                    
+                    // ▼▼▼ 原因調査のための詳細ログ ▼▼▼
+                    console.log(`--- STARTING SEARCH IN login-history FOR examNumber: "${examNumber}" ---`);
                     const historyRow = historyRows.find(row => {
-                        const num = row.get('examNumber');
-                        return num && num.toString() === examNumber.toString();
+                        const numInSheet = row.get('examNumber');
+                        if (!numInSheet) return false;
+
+                        const numAsString = numInSheet.toString().trim();
+                        const inputAsString = examNumber.toString().trim();
+                        const isMatch = numAsString === inputAsString;
+                        
+                        // 各行の比較結果をログに出力
+                        console.log(`Comparing sheet value: "${numAsString}" (type: ${typeof numInSheet}) with input: "${inputAsString}". Match: ${isMatch}`);
+                        return isMatch;
                     });
+                    console.log(`--- FINISHED SEARCH ---`);
+                    // ▲▲▲ 原因調査ログここまで ▲▲▲
 
                     if (historyRow) {
                         const rowIndex = historyRow.rowIndex - 1;
@@ -72,7 +84,6 @@ exports.handler = async function(event, context) {
                         const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
                         const timestamp = jstNow.toISOString().slice(0, 19).replace('T', ' ');
 
-                        // loginCountセルの更新
                         const loginCountIndex = historySheet.headerValues.indexOf('loginCount');
                         if (loginCountIndex !== -1) {
                             const loginCountCell = historySheet.getCell(rowIndex, loginCountIndex);
@@ -80,7 +91,6 @@ exports.handler = async function(event, context) {
                             loginCountCell.value = currentCount + 1;
                         }
 
-                        // firstLoginセルの更新 (初回のみ)
                         const firstLoginIndex = historySheet.headerValues.indexOf('firstLogin');
                         if (firstLoginIndex !== -1) {
                             const firstLoginCell = historySheet.getCell(rowIndex, firstLoginIndex);
@@ -89,7 +99,6 @@ exports.handler = async function(event, context) {
                             }
                         }
 
-                        // lastLoginセルの更新
                         const lastLoginIndex = historySheet.headerValues.indexOf('lastLogin');
                         if (lastLoginIndex !== -1) {
                             const lastLoginCell = historySheet.getCell(rowIndex, lastLoginIndex);
@@ -97,6 +106,7 @@ exports.handler = async function(event, context) {
                         }
 
                         await historySheet.saveUpdatedCells();
+                        console.log(`Successfully updated cells for examNumber: ${examNumber}`);
                     } else {
                         console.warn(`login-historyシートに受験番号'${examNumber}'の記録が見つかりませんでした。`);
                     }
