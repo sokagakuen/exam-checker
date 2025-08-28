@@ -56,30 +56,16 @@ exports.handler = async function(event, context) {
                     await historySheet.loadHeaderRow();
                     const historyRows = await historySheet.getRows();
                     
-                    // ▼▼▼ 原因調査のための詳細ログ ▼▼▼
-                    console.log(`--- STARTING SEARCH IN login-history FOR examNumber: "${examNumber}" ---`);
                     const historyRow = historyRows.find(row => {
                         const numInSheet = row.get('examNumber');
-                        if (!numInSheet) return false;
-
-                        const numAsString = numInSheet.toString().trim();
-                        const inputAsString = examNumber.toString().trim();
-                        const isMatch = numAsString === inputAsString;
-                        
-                        // 各行の比較結果をログに出力
-                        console.log(`Comparing sheet value: "${numAsString}" (type: ${typeof numInSheet}) with input: "${inputAsString}". Match: ${isMatch}`);
-                        return isMatch;
+                        return numInSheet && numInSheet.toString().trim() === examNumber.toString().trim();
                     });
-                    console.log(`--- FINISHED SEARCH ---`);
-                    // ▲▲▲ 原因調査ログここまで ▲▲▲
 
                     if (historyRow) {
-                        const rowIndex = historyRow.rowIndex - 1;
-                        await historySheet.loadCells({
-                            startRowIndex: rowIndex, endRowIndex: rowIndex + 1,
-                            startColumnIndex: 0, endColumnIndex: historySheet.headerValues.length
-                        });
+                        // ★★★ シート全体のセルを読み込むように修正 ★★★
+                        await historySheet.loadCells();
 
+                        const rowIndex = historyRow.rowIndex - 1;
                         const now = new Date();
                         const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
                         const timestamp = jstNow.toISOString().slice(0, 19).replace('T', ' ');
@@ -106,7 +92,6 @@ exports.handler = async function(event, context) {
                         }
 
                         await historySheet.saveUpdatedCells();
-                        console.log(`Successfully updated cells for examNumber: ${examNumber}`);
                     } else {
                         console.warn(`login-historyシートに受験番号'${examNumber}'の記録が見つかりませんでした。`);
                     }
