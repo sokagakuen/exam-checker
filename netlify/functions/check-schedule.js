@@ -43,36 +43,34 @@ exports.handler = async function(event, context) {
         const student = studentRows.find(row => row.get('examNumber') === examNumber && row.get('password') === password)?.toObject();
 
         if (student) {
-            // ▼▼▼ ログイン記録の書き込み処理 (login-historyシートへ) ▼▼▼
+            // ▼▼▼ ログイン記録の書き込み処理 (login-historyシートの既存行を更新) ▼▼▼
             try {
                 const historySheet = doc.sheetsByTitle[GOOGLE_HISTORY_SHEET_NAME];
                 if (!historySheet) {
                     console.error(`'${GOOGLE_HISTORY_SHEET_NAME}' という名前のシートが見つかりません。`);
-                    // 書き込みは失敗するが、ログイン自体は成功させる
                 } else {
                     const historyRows = await historySheet.getRows();
                     let historyRow = historyRows.find(row => row.get('examNumber') === examNumber);
 
-                    const now = new Date();
-                    const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-                    const timestamp = jstNow.toISOString().slice(0, 19).replace('T', ' ');
-
                     if (historyRow) {
                         // 既存の記録を更新
+                        const now = new Date();
+                        const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+                        const timestamp = jstNow.toISOString().slice(0, 19).replace('T', ' ');
+
                         const currentCount = parseInt(historyRow.get('loginCount'), 10) || 0;
+                        const firstLogin = historyRow.get('firstLogin');
+
                         historyRow.set('loginCount', currentCount + 1);
+                        // firstLoginが空の場合のみ、初回ログイン日時を記録
+                        if (!firstLogin) {
+                            historyRow.set('firstLogin', timestamp);
+                        }
                         historyRow.set('lastLogin', timestamp);
-                        await historyRow.save();
+                        await historyRow.save(); // 変更を保存
                     } else {
-                        // ★新しい記録を追加する際に氏名も追加
-                        await historySheet.addRow({
-                            examNumber: student.examNumber,
-                            lastName: student.lastName,
-                            firstName: student.firstName,
-                            loginCount: 1,
-                            firstLogin: timestamp,
-                            lastLogin: timestamp,
-                        });
+                        // データが事前に準備されている前提のため、ここに来た場合はデータ不整合
+                        console.warn(`login-historyシートに受験番号'${examNumber}'の記録が見つかりませんでした。`);
                     }
                 }
             } catch (writeError) {
