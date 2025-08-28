@@ -40,8 +40,11 @@ exports.handler = async function(event, context) {
             return { statusCode: 400, body: JSON.stringify({ success: false, message: '受験番号とパスワードを入力してください。' }) };
         }
 
-        // ★★★ 比較時に両方を文字列に変換 ★★★
-        const student = studentRows.find(row => row.get('examNumber').toString() === examNumber.toString() && row.get('password') === password)?.toObject();
+        // ★★★ 空のセルがあってもエラーにならないように修正 ★★★
+        const student = studentRows.find(row => {
+            const num = row.get('examNumber');
+            return num && num.toString() === examNumber.toString() && row.get('password') === password;
+        })?.toObject();
 
         if (student) {
             // ▼▼▼ ログイン記録の書き込み処理 (login-historyシートの特定セルのみ更新) ▼▼▼
@@ -52,11 +55,13 @@ exports.handler = async function(event, context) {
                 } else {
                     await historySheet.loadHeaderRow();
                     const historyRows = await historySheet.getRows();
-                    // ★★★ 比較時に両方を文字列に変換 ★★★
-                    const historyRow = historyRows.find(row => row.get('examNumber').toString() === examNumber.toString());
+                    // ★★★ 空のセルがあってもエラーにならないように修正 ★★★
+                    const historyRow = historyRows.find(row => {
+                        const num = row.get('examNumber');
+                        return num && num.toString() === examNumber.toString();
+                    });
 
                     if (historyRow) {
-                        console.log(`Found history row for examNumber: ${examNumber}`); // デバッグログ
                         const rowIndex = historyRow.rowIndex - 1;
                         await historySheet.loadCells({
                             startRowIndex: rowIndex, endRowIndex: rowIndex + 1,
@@ -92,7 +97,6 @@ exports.handler = async function(event, context) {
                         }
 
                         await historySheet.saveUpdatedCells();
-                        console.log(`Successfully updated history for examNumber: ${examNumber}`); // デバッグログ
                     } else {
                         console.warn(`login-historyシートに受験番号'${examNumber}'の記録が見つかりませんでした。`);
                     }
